@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mesh
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mesh
+  namespace: mesh
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: mesh
+  namespace: mesh
+rules:
+  - apiGroups:
+    - ""
+    resources:
+      - pods
+    verbs:
+      - list
+      - get
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: mesh
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mesh
+subjects:
+- kind: ServiceAccount
+  name: mesh
+  namespace: mesh
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mesh
+  namespace: mesh
+spec:
+  selector:
+    matchLabels:
+      name: mesh
+  replicas: 2
+
+  template:
+    metadata:
+      labels:
+        name: mesh
+    spec:
+      serviceAccount: mesh
+      serviceAccountName: mesh    
+      containers:
+      - name: mesh
+        image: muralireddy/mesh-perf:latest
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        ports:
+        - containerPort: 6783
+
