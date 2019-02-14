@@ -45,23 +45,26 @@ spec:
   selector:
     matchLabels:
       name: mesh
-  replicas: 2
-
+  replicas: 6
   template:
     metadata:
       labels:
         name: mesh
     spec:
       serviceAccount: mesh
-      serviceAccountName: mesh    
+      serviceAccountName: mesh
       containers:
       - name: mesh
         image: muralireddy/mesh-perf:latest
         imagePullPolicy: Always
+        env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         resources:
           requests:
             cpu: 100m
             memory: 100Mi
         ports:
         - containerPort: 6783
-

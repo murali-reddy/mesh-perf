@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -26,7 +25,7 @@ func main() {
 	peers := &stringset{}
 	var (
 		httpListen = flag.String("http", ":8080", "HTTP listen address")
-		meshListen = flag.String("mesh", net.JoinHostPort("0.0.0.0", strconv.Itoa(mesh.Port)), "mesh listen address")
+		meshListen = flag.String("mesh", net.JoinHostPort(os.Getenv("POD_IP"), strconv.Itoa(mesh.Port)), "mesh listen address")
 		hwaddr     = flag.String("hwaddr", mustHardwareAddr(), "MAC address, i.e. mesh peer ID")
 		nickname   = flag.String("nickname", mustHostname(), "peer nickname")
 		password   = flag.String("password", "", "password (optional)")
@@ -56,7 +55,7 @@ func main() {
 		Port:               port,
 		ProtocolMinVersion: mesh.ProtocolMinVersion,
 		Password:           []byte(*password),
-		ConnLimit:          64,
+		ConnLimit:          1000,
 		PeerDiscovery:      true,
 		TrustedSubnets:     []*net.IPNet{},
 	}, name, *nickname, mesh.NullOverlay{}, log.New(ioutil.Discard, "", 0))
@@ -91,8 +90,7 @@ func main() {
 		panic(err.Error())
 	}
 
-	r := rand.Intn(5000)
-	time.Sleep(time.Duration(r) * time.Millisecond)
+	time.Sleep(30 * time.Second)
 	pods, err := clientset.CoreV1().Pods("mesh").List(metav1.ListOptions{})
 	if err != nil {
 		panic(err.Error())
@@ -100,10 +98,12 @@ func main() {
 
 	for _, pod := range pods.Items {
 		if pod.Status.PodIP != "" {
-			peers.Set(pod.Status.PodIP + ":" + portStr)
+			if pod.Status.PodIP != os.Getenv("POD_IP") {
+				peers.Set(pod.Status.PodIP + ":" + portStr)
+			}
 		}
 	}
-
+	logger.Printf("PEERS: " + peers.String())
 	router.ConnectionMaker.InitiateConnections(peers.slice(), true)
 
 	errs := make(chan error)
@@ -120,8 +120,13 @@ func main() {
 	go func() {
 		for {
 			status := mesh.NewStatus(router)
-			logger.Printf("Status: %v", status.Connections)
-			time.Sleep(5 * time.Second)
+			logger.Printf("Coneection Status: \n")
+			logger.Printf("------------------------------------------------------\n")
+			for _, connection := range status.Connections {
+				logger.Printf("%v\n", connection)
+			}
+
+			time.Sleep(30 * time.Second)
 		}
 	}()
 	logger.Print(<-errs)
