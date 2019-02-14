@@ -2,12 +2,17 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,35 +23,19 @@ import (
 )
 
 func main() {
-	peers := []string{}
+	peers := &stringset{}
 	var (
+		httpListen = flag.String("http", ":8080", "HTTP listen address")
 		meshListen = flag.String("mesh", net.JoinHostPort("0.0.0.0", strconv.Itoa(mesh.Port)), "mesh listen address")
 		hwaddr     = flag.String("hwaddr", mustHardwareAddr(), "MAC address, i.e. mesh peer ID")
 		nickname   = flag.String("nickname", mustHostname(), "peer nickname")
 		password   = flag.String("password", "", "password (optional)")
+		channel    = flag.String("channel", "default", "gossip channel name")
 	)
-
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		panic(err.Error())
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err.Error())
-	}
+	flag.Var(peers, "peer", "initial peer (may be repeated)")
+	flag.Parse()
 
 	logger := log.New(os.Stderr, *nickname+"> ", log.LstdFlags)
-
-	pods, err := clientset.CoreV1().Pods("mesh").List(metav1.ListOptions{})
-	if err != nil {
-		panic(err.Error())
-	}
-
-	for _, pod := range pods.Items {
-		if pod.Status.PodIP != "" {
-			peers = append(peers, pod.Status.PodIP)
-		}
-	}
 
 	host, portStr, err := net.SplitHostPort(*meshListen)
 	if err != nil {
@@ -71,20 +60,63 @@ func main() {
 		PeerDiscovery:      true,
 		TrustedSubnets:     []*net.IPNet{},
 	}, name, *nickname, mesh.NullOverlay{}, log.New(ioutil.Discard, "", 0))
+
 	if err != nil {
-		logger.Fatalf("Failed to create router")
+		logger.Fatalf("Could not create router: %v", err)
 	}
 
-	logger.Printf("mesh router starting")
-	router.Start()
-
-	logger.Printf("Initiating connections to the peers: %v", peers)
-	errors := router.ConnectionMaker.InitiateConnections(peers, true)
-
-	if len(errors) > 0 {
-		logger.Fatalf("Could not initiate connection")
+	peer := newPeer(name, logger)
+	gossip, err := router.NewGossip(*channel, peer)
+	if err != nil {
+		logger.Fatalf("Could not create gossip: %v", err)
 	}
 
+	peer.register(gossip)
+
+	func() {
+		logger.Printf("mesh router starting (%s)", *meshListen)
+		router.Start()
+	}()
+	defer func() {
+		logger.Printf("mesh router stopping")
+		router.Stop()
+	}()
+
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		panic(err.Error())
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	r := rand.Intn(5000)
+	time.Sleep(time.Duration(r) * time.Millisecond)
+	pods, err := clientset.CoreV1().Pods("mesh").List(metav1.ListOptions{})
+	if err != nil {
+		panic(err.Error())
+	}
+
+	for _, pod := range pods.Items {
+		if pod.Status.PodIP != "" {
+			peers.Set(pod.Status.PodIP + ":" + portStr)
+		}
+	}
+
+	router.ConnectionMaker.InitiateConnections(peers.slice(), true)
+
+	errs := make(chan error)
+	go func() {
+		c := make(chan os.Signal)
+		signal.Notify(c, syscall.SIGINT)
+		errs <- fmt.Errorf("%s", <-c)
+	}()
+	go func() {
+		logger.Printf("HTTP server starting (%s)", *httpListen)
+		http.HandleFunc("/", handle(peer))
+		errs <- http.ListenAndServe(*httpListen, nil)
+	}()
 	go func() {
 		for {
 			status := mesh.NewStatus(router)
@@ -92,18 +124,45 @@ func main() {
 			time.Sleep(5 * time.Second)
 		}
 	}()
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-	for {
-		select {
-		case sig := <-sigs:
-			logger.Printf("%v", sig)
-			return
+	logger.Print(<-errs)
+}
+
+type counter interface {
+	get() int
+	incr() int
+}
+
+func handle(c counter) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			fmt.Fprintf(w, "get => %d\n", c.get())
+
+		case "POST":
+			fmt.Fprintf(w, "incr => %d\n", c.incr())
 		}
 	}
 }
 
 type stringset map[string]struct{}
+
+func (ss stringset) Set(value string) error {
+	ss[value] = struct{}{}
+	return nil
+}
+
+func (ss stringset) String() string {
+	return strings.Join(ss.slice(), ",")
+}
+
+func (ss stringset) slice() []string {
+	slice := make([]string, 0, len(ss))
+	for k := range ss {
+		slice = append(slice, k)
+	}
+	sort.Strings(slice)
+	return slice
+}
 
 func mustHardwareAddr() string {
 	ifaces, err := net.Interfaces()
