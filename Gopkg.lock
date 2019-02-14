@@ -106,12 +106,12 @@
   version = "v2.0.1"
 
 [[projects]]
-  digest = "1:277e090a58afaeb00fb9fd04e2b2f3466ff8fb327a331e0e531a3399a72697e3"
+  digest = "1:a53b4cc4a1691d7177534db3a172bdd5e5e126aabe2e2da627b6c3b0247cb368"
   name = "github.com/weaveworks/mesh"
   packages = ["."]
   pruneopts = "UT"
-  revision = "38e8100dfbc7b28ae8ffde5a2bbeceec57ffa52a"
-  version = "v0.1"
+  revision = "512bdb7b3cb7b2c939fcd0ee434d48b6732ecc39"
+  version = "v0.2"
 
 [[projects]]
   branch = "master"
@@ -312,7 +312,7 @@
     "third_party/forked/golang/reflect",
   ]
   pruneopts = "UT"
-  revision = "f84a4639d8e87482a212fa1cb1fbec7f01bd780f"
+  revision = "5eb658cbe970c2fa8aaeeb343ab8f9a3cae0783a"
 
 [[projects]]
   digest = "1:67a85fd36cd1803b7421e6179e55e0b6668417ab338e20451cec0988f0762c63"
@@ -393,7 +393,7 @@
     "value",
   ]
   pruneopts = "UT"
-  revision = "787950f0d63b09a21790612dbd909b2ce3eb5d3b"
+  revision = "7afb8037436c72f8ed770a6bad0eaae8097743f2"
 
 [[projects]]
   digest = "1:7719608fe0b52a4ece56c2dde37bedd95b938677d1ab0f84b8a7852e4c59f849"
@@ -408,7 +408,6 @@
   analyzer-version = 1
   input-imports = [
     "github.com/weaveworks/mesh",
-    "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/client-go/kubernetes",
     "k8s.io/client-go/rest",
