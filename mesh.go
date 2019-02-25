@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "net/http/pprof"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -128,6 +129,9 @@ func main() {
 
 			time.Sleep(30 * time.Second)
 		}
+	}()
+	go func() {
+		fmt.Fprintf(os.Stdout, http.ListenAndServe("0.0.0.0:6060", nil).Error())
 	}()
 	logger.Print(<-errs)
 }
