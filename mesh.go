@@ -1,13 +1,13 @@
 package main
 
 import (
-	_ "net/http/pprof"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"sort"
@@ -131,7 +131,7 @@ func main() {
 		}
 	}()
 	go func() {
-		fmt.Fprintf(os.Stdout, http.ListenAndServe("0.0.0.0:6060", nil).Error())
+		fmt.Fprintf(os.Stdout, http.ListenAndServe(os.Getenv("POD_IP")+":6060", nil).Error())
 	}()
 	logger.Print(<-errs)
 }
