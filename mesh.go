@@ -25,14 +25,16 @@ import (
 func main() {
 	peers := &stringset{}
 	var (
-		httpListen = flag.String("http", ":8080", "HTTP listen address")
 		meshListen = flag.String("mesh", net.JoinHostPort(os.Getenv("POD_IP"), strconv.Itoa(mesh.Port)), "mesh listen address")
 		hwaddr     = flag.String("hwaddr", mustHardwareAddr(), "MAC address, i.e. mesh peer ID")
 		nickname   = flag.String("nickname", mustHostname(), "peer nickname")
-		channel    = flag.String("channel", "default", "gossip channel name")
 	)
 	flag.Var(peers, "peer", "initial peer (may be repeated)")
 	flag.Parse()
+
+	go func() {
+		log.Println(http.ListenAndServe(os.Getenv("POD_IP")+":6060", nil))
+	}()
 
 	logger := log.New(os.Stderr, *nickname+"> ", log.LstdFlags)
 
@@ -63,14 +65,6 @@ func main() {
 		logger.Fatalf("Could not create router: %v", err)
 	}
 
-	peer := newPeer(name, logger)
-	gossip, err := router.NewGossip(*channel, peer)
-	if err != nil {
-		logger.Fatalf("Could not create gossip: %v", err)
-	}
-
-	peer.register(gossip)
-
 	func() {
 		logger.Printf("mesh router starting (%s)", *meshListen)
 		router.Start()
@@ -98,7 +92,7 @@ func main() {
 	for _, pod := range pods.Items {
 		if pod.Status.PodIP != "" {
 			if pod.Status.PodIP != os.Getenv("POD_IP") {
-				peers.Set(pod.Status.PodIP + ":" + portStr)
+				peers.Set(pod.Status.PodIP)
 			}
 		}
 	}
@@ -112,11 +106,6 @@ func main() {
 		errs <- fmt.Errorf("%s", <-c)
 	}()
 	go func() {
-		logger.Printf("HTTP server starting (%s)", *httpListen)
-		http.HandleFunc("/", handle(peer))
-		errs <- http.ListenAndServe(*httpListen, nil)
-	}()
-	go func() {
 		for {
 			status := mesh.NewStatus(router)
 			logger.Printf("Coneection Status: \n")
@@ -128,27 +117,7 @@ func main() {
 			time.Sleep(30 * time.Second)
 		}
 	}()
-	go func() {
-		fmt.Fprintf(os.Stdout, http.ListenAndServe(os.Getenv("POD_IP")+":6060", nil).Error())
-	}()
 	logger.Print(<-errs)
-}
-
-type counter interface {
-	get() int
-	incr() int
-}
-
-func handle(c counter) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "GET":
-			fmt.Fprintf(w, "get => %d\n", c.get())
-
-		case "POST":
-			fmt.Fprintf(w, "incr => %d\n", c.incr())
-		}
-	}
 }
 
 type stringset map[string]struct{}
