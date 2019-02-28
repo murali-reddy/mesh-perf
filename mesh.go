@@ -29,7 +29,6 @@ func main() {
 		meshListen = flag.String("mesh", net.JoinHostPort(os.Getenv("POD_IP"), strconv.Itoa(mesh.Port)), "mesh listen address")
 		hwaddr     = flag.String("hwaddr", mustHardwareAddr(), "MAC address, i.e. mesh peer ID")
 		nickname   = flag.String("nickname", mustHostname(), "peer nickname")
-		password   = flag.String("password", "", "password (optional)")
 		channel    = flag.String("channel", "default", "gossip channel name")
 	)
 	flag.Var(peers, "peer", "initial peer (may be repeated)")
@@ -55,7 +54,6 @@ func main() {
 		Host:               host,
 		Port:               port,
 		ProtocolMinVersion: mesh.ProtocolMinVersion,
-		Password:           []byte(*password),
 		ConnLimit:          1000,
 		PeerDiscovery:      true,
 		TrustedSubnets:     []*net.IPNet{},
